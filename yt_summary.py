@@ -377,9 +377,9 @@ class YouTubeSummaryTool:
                     duration = float(segment.get('duration', 0))
                 else:
                     # FetchedTranscriptSnippet object
-                    text = str(segment.text)
-                    start = float(segment.start)
-                    duration = float(segment.duration)
+                    text = str(segment.text)  # type: ignore[attr-defined]
+                    start = float(segment.start)  # type: ignore[attr-defined]
+                    duration = float(segment.duration)  # type: ignore[attr-defined]
 
                 if self.args.clean_tags:
                     text = re.sub(r'\[.*?\]', '', text).strip()
@@ -517,7 +517,7 @@ class YouTubeSummaryTool:
                 self.logger.info(f"Found subtitle file: {subtitle_file.name}")
 
                 segments: List[Dict[str, Any]] = []
-                text_parts = []
+                text_parts: List[str] = []
 
                 if file_ext in ['.json3', '.srv3', '.srv2', '.srv1']:
                     # Parse JSON-based subtitle format
@@ -532,13 +532,13 @@ class YouTubeSummaryTool:
                                 if self.args.clean_tags:
                                     text = re.sub(r'\[.*?\]', '', text).strip()
 
-                                segment: Dict[str, Any] = {
+                                subtitle_segment: Dict[str, Any] = {
                                     'start': event.get('tStartMs', 0) / 1000.0,
                                     'duration': event.get('dDurationMs', 0) / 1000.0,
                                     'text': text
                                 }
-                                segments.append(segment)
-                                text_parts.append(text)
+                                segments.append(subtitle_segment)
+                                text_parts.append(str(text))
 
                 elif file_ext == '.vtt':
                     # Parse VTT format
@@ -592,13 +592,13 @@ class YouTubeSummaryTool:
 
                             text = text.strip()
                             if text:
-                                segment: Dict[str, Any] = {
+                                vtt_segment: Dict[str, Any] = {
                                     'start': start,
                                     'duration': end - start,
                                     'text': text
                                 }
-                                segments.append(segment)
-                                text_parts.append(text)
+                                segments.append(vtt_segment)
+                                text_parts.append(str(text))
                         else:
                             i += 1
 
