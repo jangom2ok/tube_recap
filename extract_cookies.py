@@ -15,16 +15,16 @@ import shutil
 import sys
 from typing import Optional, Any
 
-# Try to import browser_cookie3 for cross-platform cookie extraction
-HAS_BROWSER_COOKIE3: bool
-browser_cookie3: Any
-
+# Check for browser_cookie3 availability
 try:
     import browser_cookie3  # type: ignore[import-not-found]
-    HAS_BROWSER_COOKIE3 = True
+    _has_browser_cookie3 = True
 except ImportError:
     browser_cookie3 = None  # type: ignore[assignment]
-    HAS_BROWSER_COOKIE3 = False
+    _has_browser_cookie3 = False
+
+# Export as constants
+HAS_BROWSER_COOKIE3: bool = _has_browser_cookie3
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
