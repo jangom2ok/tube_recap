@@ -12,13 +12,12 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -190,7 +189,7 @@ class YouTubeSummaryTool:
 
     def get_video_ids(self) -> List[Tuple[str, Dict[str, str]]]:
         """Get list of video IDs based on input arguments"""
-        videos = []
+        videos: List[Tuple[str, Dict[str, str]]] = []
 
         if self.args.channel_id:
             videos = self._get_channel_videos(self.args.channel_id)
@@ -225,19 +224,19 @@ class YouTubeSummaryTool:
         ns = {'atom': 'http://www.w3.org/2005/Atom',
               'media': 'http://search.yahoo.com/mrss/'}
 
-        videos = []
+        videos: List[Tuple[str, Dict[str, str]]] = []
         for entry in root.findall('atom:entry', ns):
             video_id_elem = entry.find('atom:id', ns)
             if video_id_elem is not None and video_id_elem.text is not None:
                 video_id = video_id_elem.text.split(':')[-1]
 
                 title_elem = entry.find('atom:title', ns)
-                title = title_elem.text if title_elem is not None else ""
+                title = title_elem.text if title_elem is not None and title_elem.text is not None else ""
 
                 published_elem = entry.find('atom:published', ns)
-                published = published_elem.text if published_elem is not None else ""
+                published = published_elem.text if published_elem is not None and published_elem.text is not None else ""
 
-                metadata = {
+                metadata: Dict[str, str] = {
                     'title': title,
                     'published_at': published,
                     'url': f"https://www.youtube.com/watch?v={video_id}"
@@ -248,7 +247,7 @@ class YouTubeSummaryTool:
 
     def _get_videos_from_file(self, file_path: str) -> List[Tuple[str, Dict[str, str]]]:
         """Get video IDs from file (text or CSV)"""
-        videos = []
+        videos: List[Tuple[str, Dict[str, str]]] = []
         file_path_obj = Path(file_path)
 
         # CSVファイルの場合
@@ -265,7 +264,7 @@ class YouTubeSummaryTool:
                             video_id = self._parse_video_id(url)
 
                     if video_id:
-                        metadata = {
+                        metadata: Dict[str, str] = {
                             'title': row.get('title', ''),
                             'published_at': row.get('published_at', ''),
                             'url': row.get('url', f"https://www.youtube.com/watch?v={video_id}")
@@ -278,7 +277,7 @@ class YouTubeSummaryTool:
                     line = line.strip()
                     if line:
                         video_id = self._parse_video_id(line)
-                        metadata = {
+                        metadata: Dict[str, str] = {
                             'title': '',
                             'published_at': '',
                             'url': f"https://www.youtube.com/watch?v={video_id}"
@@ -286,7 +285,7 @@ class YouTubeSummaryTool:
                         videos.append((video_id, metadata))
         return videos
 
-    def fetch_transcript(self, video_id: str) -> Optional[Tuple[List[Dict], str, str]]:
+    def fetch_transcript(self, video_id: str) -> Optional[Tuple[List[Dict[str, Any]], str, str]]:
         """Fetch transcript for a video"""
         try:
             # Check if already exists and not forcing
@@ -427,7 +426,7 @@ class YouTubeSummaryTool:
             self.logger.error(f"Failed to fetch transcript for {video_id}: {e}")
             return None
 
-    def _fetch_transcript_ytdlp(self, video_id: str) -> Optional[Tuple[List[Dict], str, str]]:
+    def _fetch_transcript_ytdlp(self, video_id: str) -> Optional[Tuple[List[Dict[str, Any]], str, str]]:
         """Fetch transcript using yt-dlp as alternative method"""
         try:
             self.logger.info(f"Fetching transcript for {video_id} using yt-dlp")
@@ -517,7 +516,7 @@ class YouTubeSummaryTool:
                 file_ext = subtitle_file.suffix.lower()
                 self.logger.info(f"Found subtitle file: {subtitle_file.name}")
 
-                segments = []
+                segments: List[Dict[str, Any]] = []
                 text_parts = []
 
                 if file_ext in ['.json3', '.srv3', '.srv2', '.srv1']:
