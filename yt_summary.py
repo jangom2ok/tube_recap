@@ -372,9 +372,9 @@ class YouTubeSummaryTool:
                 # Clean text if requested
                 # Handle both dict and object formats
                 if isinstance(segment, dict):
-                    text = str(segment['text'])
-                    start = float(segment['start'])
-                    duration = float(segment['duration'])
+                    text = str(segment.get('text', ''))
+                    start = float(segment.get('start', 0))
+                    duration = float(segment.get('duration', 0))
                 else:
                     # FetchedTranscriptSnippet object
                     text = str(segment.text)
@@ -532,7 +532,7 @@ class YouTubeSummaryTool:
                                 if self.args.clean_tags:
                                     text = re.sub(r'\[.*?\]', '', text).strip()
 
-                                segment = {
+                                segment: Dict[str, Any] = {
                                     'start': event.get('tStartMs', 0) / 1000.0,
                                     'duration': event.get('dDurationMs', 0) / 1000.0,
                                     'text': text
@@ -592,7 +592,7 @@ class YouTubeSummaryTool:
 
                             text = text.strip()
                             if text:
-                                segment = {
+                                segment: Dict[str, Any] = {
                                     'start': start,
                                     'duration': end - start,
                                     'text': text
@@ -606,7 +606,7 @@ class YouTubeSummaryTool:
                     self.logger.error(f"No valid segments found in subtitle for {video_id}")
                     return None
 
-                full_text = ' '.join(text_parts)
+                full_text: str = ' '.join(text_parts)
 
                 # Save to files
                 json_path = self.transcript_dir / f"{video_id}.json"
@@ -642,7 +642,7 @@ class YouTubeSummaryTool:
                     return SummaryResult(**data)
 
             # Estimate tokens (rough estimate for Japanese: 2-3 chars per token)
-            tokens_estimate = len(text) // 2
+            # tokens_estimate = len(text) // 2  # Not used directly, calculated in SummaryResult
 
             # Apply map-reduce if text is too long
             if len(text) > self.args.chunk_chars * 2:
