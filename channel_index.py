@@ -8,6 +8,7 @@ YouTube Channel Video Index Generator
 import argparse
 import csv
 import logging
+import os
 import re
 import sys
 import time
@@ -18,6 +19,10 @@ from typing import List, Optional, Dict
 
 import httpx
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 @dataclass
@@ -143,11 +148,9 @@ class ChannelIndexGenerator:
         
     def fetch_all_videos_via_api(self) -> List[VideoMetadata]:
         """YouTube Data APIを使用して全動画を取得（APIキーが必要）"""
-        import os
-        
-        api_key = os.environ.get('YOUTUBE_API_KEY')
+        api_key = os.getenv('YOUTUBE_API_KEY')
         if not api_key:
-            self.logger.warning("YOUTUBE_API_KEY not found. Using feed method (limited to recent videos).")
+            self.logger.warning("YOUTUBE_API_KEY not found in environment or .env file. Using feed method (limited to recent videos).")
             return []
             
         videos: List[VideoMetadata] = []

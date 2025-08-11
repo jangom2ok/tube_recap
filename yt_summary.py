@@ -28,6 +28,10 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, IpBlocked
 import subprocess
 import tempfile
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 @dataclass
@@ -777,9 +781,9 @@ class YouTubeSummaryTool:
         try:
             import anthropic
             
-            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            api_key = os.getenv('ANTHROPIC_API_KEY')
             if not api_key:
-                raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+                raise ValueError("ANTHROPIC_API_KEY not found in environment or .env file")
                 
             client = anthropic.Anthropic(api_key=api_key)
             
@@ -801,9 +805,9 @@ class YouTubeSummaryTool:
         try:
             import openai
             
-            api_key = os.environ.get('OPENAI_API_KEY')
+            api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
-                raise ValueError("OPENAI_API_KEY environment variable not set")
+                raise ValueError("OPENAI_API_KEY not found in environment or .env file")
                 
             client = openai.OpenAI(api_key=api_key)
             
@@ -971,24 +975,32 @@ def main():
     input_group.add_argument('--video-ids-file', help='File with video IDs/URLs (one per line)')
     
     # Output options
-    parser.add_argument('--outdir', default='./out', help='Output directory (default: ./out)')
-    parser.add_argument('--max-videos', type=int, default=50, help='Maximum videos to process (default: 50)')
+    parser.add_argument('--outdir', default=os.getenv('OUTPUT_DIR', './out'), 
+                       help='Output directory (default: from .env or ./out)')
+    parser.add_argument('--max-videos', type=int, 
+                       default=int(os.getenv('MAX_VIDEOS', '50')), 
+                       help='Maximum videos to process (default: from .env or 50)')
     
     # Transcript options
-    parser.add_argument('--languages', default='ja,ja-JP,en', 
-                       help='Preferred languages in order (default: ja,ja-JP,en)')
+    parser.add_argument('--languages', default=os.getenv('LANGUAGES', 'ja,ja-JP,en'), 
+                       help='Preferred languages in order (default: from .env or ja,ja-JP,en)')
     parser.add_argument('--clean-tags', action='store_true', 
+                       default=os.getenv('CLEAN_TAGS', 'false').lower() == 'true',
                        help='Remove [tag] metadata from transcripts')
     
     # AI provider options
     parser.add_argument('--provider', choices=['anthropic', 'openai'], 
-                       default='anthropic', help='AI provider (default: anthropic)')
-    parser.add_argument('--model', default='claude-3-5-sonnet-latest',
-                       help='Model name (default: claude-3-5-sonnet-latest)')
-    parser.add_argument('--chunk-chars', type=int, default=6000,
-                       help='Characters per chunk for map-reduce (default: 6000)')
-    parser.add_argument('--chunk-overlap', type=int, default=300,
-                       help='Overlap between chunks (default: 300)')
+                       default=os.getenv('AI_PROVIDER', 'anthropic'), 
+                       help='AI provider (default: from .env or anthropic)')
+    parser.add_argument('--model', 
+                       default=os.getenv('AI_MODEL', 'claude-3-5-sonnet-latest'),
+                       help='Model name (default: from .env or claude-3-5-sonnet-latest)')
+    parser.add_argument('--chunk-chars', type=int, 
+                       default=int(os.getenv('CHUNK_SIZE', '6000')),
+                       help='Characters per chunk for map-reduce (default: from .env or 6000)')
+    parser.add_argument('--chunk-overlap', type=int, 
+                       default=int(os.getenv('CHUNK_OVERLAP', '300')),
+                       help='Overlap between chunks (default: from .env or 300)')
     parser.add_argument('--summary-max-tokens', type=int, default=2000,
                        help='Max tokens for summary (default: 2000)')
     
@@ -997,16 +1009,20 @@ def main():
                        help='Force regeneration of existing files')
     parser.add_argument('--dry-run', action='store_true',
                        help='Show what would be processed without doing it')
-    parser.add_argument('--rps', type=float, default=0.8,
-                       help='Requests per second limit (default: 0.8)')
+    parser.add_argument('--rps', type=float, 
+                       default=float(os.getenv('REQUESTS_PER_SECOND', '0.8')),
+                       help='Requests per second limit (default: from .env or 0.8)')
     
     # Logging
     parser.add_argument('--log-file', help='Log file path')
     
     # Proxy and authentication
-    parser.add_argument('--proxy', help='HTTP/HTTPS proxy URL (e.g., http://proxy.example.com:8080)')
-    parser.add_argument('--cookies-file', help='Path to cookies.txt file for YouTube authentication')
+    parser.add_argument('--proxy', default=os.getenv('PROXY_URL'),
+                       help='HTTP/HTTPS proxy URL (e.g., http://proxy.example.com:8080)')
+    parser.add_argument('--cookies-file', default=os.getenv('COOKIES_FILE'),
+                       help='Path to cookies.txt file for YouTube authentication')
     parser.add_argument('--use-ytdlp', action='store_true',
+                       default=os.getenv('USE_YTDLP', 'false').lower() == 'true',
                        help='Use yt-dlp for transcript fetching (more robust, avoids IP blocks)')
     
     args = parser.parse_args()

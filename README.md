@@ -20,24 +20,34 @@ YouTube動画の文字起こしを取得し、AI（Claude/OpenAI）で日本語�
 pip install -r requirements.txt
 ```
 
-### 2. API キーの設定
+### 2. 環境変数の設定
 
-#### fish シェルの場合
+#### 方法1: .envファイルを使用（推奨）
 
-```fish
-set -x -g ANTHROPIC_API_KEY "sk-ant-..."
-set -x -g OPENAI_API_KEY "sk-proj-..."
-# オプション: YouTube Data API（全動画取得用）
-set -x -g YOUTUBE_API_KEY "AIza..."
-```
-
-#### bash/zsh の場合
+`.env.example`をコピーして`.env`ファイルを作成し、APIキーを設定します：
 
 ```bash
+# .envファイルを作成
+cp .env.example .env
+
+# .envファイルを編集してAPIキーを設定
+# ANTHROPIC_API_KEY=sk-ant-xxxxx
+# OPENAI_API_KEY=sk-proj-xxxxx
+# YOUTUBE_API_KEY=AIzaSyxxxxx（オプション）
+```
+
+#### 方法2: 環境変数を直接設定
+
+```bash
+# bash/zsh の場合
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-proj-..."
-# オプション: YouTube Data API（全動画取得用）
-export YOUTUBE_API_KEY="AIza..."
+export YOUTUBE_API_KEY="AIza..."  # オプション
+
+# fish シェルの場合
+set -x -g ANTHROPIC_API_KEY "sk-ant-..."
+set -x -g OPENAI_API_KEY "sk-proj-..."
+set -x -g YOUTUBE_API_KEY "AIza..."  # オプション
 ```
 
 ## クイックスタート
@@ -46,7 +56,7 @@ export YOUTUBE_API_KEY="AIza..."
 
 ```bash
 # 方法1: 統合スクリプトで一括実行
-python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw --max-videos 10
+python process_channel.py <channel_id> --max-videos 10
 
 # 方法2: チャンネルURLから処理
 python process_channel.py --from-url "https://www.youtube.com/@GoogleDevelopers" --max-videos 5
@@ -63,14 +73,14 @@ python process_channel.py --use-existing-csv index.csv
 
 ```bash
 # チャンネルIDから動画一覧を取得
-python channel_index.py UC_x5XG1OV2P6uZZ5FSM9Ttw
+python channel_index.py <channel_id>
 
 # チャンネルURLから自動的にIDを取得
 python channel_index.py --from-url "https://www.youtube.com/@GoogleDevelopers"
 
 # YouTube Data APIで全動画を取得（要APIキー）
 export YOUTUBE_API_KEY="your-api-key"
-python channel_index.py UC_x5XG1OV2P6uZZ5FSM9Ttw --max-pages 20
+python channel_index.py <channel_id> --max-pages 20
 ```
 
 出力されるCSV形式：
@@ -132,10 +142,10 @@ python yt_summary.py \
 
 ```bash
 # 基本的な使い方
-python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw
+python process_channel.py <channel_id>
 
 # 詳細なオプション
-python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw \
+python process_channel.py <channel_id> \
   --max-videos 20 \
   --provider openai \
   --model gpt-4o-mini \
@@ -202,6 +212,30 @@ out/
   ],
   "tokens_estimate": 1234
 }
+```
+
+## 環境変数（.env）設定
+
+`.env`ファイルで以下の設定をカスタマイズできます：
+
+```bash
+# AI設定
+AI_PROVIDER=anthropic          # AI プロバイダー (anthropic/openai)
+AI_MODEL=claude-3-5-sonnet-latest  # 使用モデル
+
+# 処理設定
+MAX_VIDEOS=50                  # 最大処理動画数
+OUTPUT_DIR=./out               # 出力ディレクトリ
+CHUNK_SIZE=6000                # チャンクサイズ
+CHUNK_OVERLAP=300              # チャンク重複
+REQUESTS_PER_SECOND=0.8        # API呼び出しレート制限
+
+# 言語設定
+LANGUAGES=ja,ja-JP,en          # 優先言語順
+
+# オプション設定
+USE_YTDLP=false               # yt-dlp使用フラグ
+CLEAN_TAGS=false              # タグクリーンフラグ
 ```
 
 ## オプション一覧
