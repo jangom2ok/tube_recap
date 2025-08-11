@@ -176,7 +176,30 @@ out/
 
 YouTubeがIPをブロックしている可能性があります。以下の対策を試してください：
 
-1. **yt-dlp を使用（推奨）**
+1. **ブラウザのCookieを使用（最も効果的）**
+
+   ブラウザでYouTubeにログインした状態のCookieを使用することで、認証済みとして扱われます：
+
+   ```bash
+   # 方法1: 付属のスクリプトで自動抽出
+   python extract_cookies.py --browser chrome --output cookies.txt
+   
+   # 方法2: browser_cookie3を使用（要インストール）
+   pip install browser_cookie3
+   python extract_cookies.py --output cookies.txt
+   
+   # Cookieを使用して実行
+   python yt_summary.py \
+     --channel-id UCpLu0KjNy616-E95gPx7LZg \
+     --max-videos 10 \
+     --outdir ./out \
+     --provider openai \
+     --model gpt-4.1 \
+     --cookies-file cookies.txt \
+     --use-ytdlp
+   ```
+
+2. **yt-dlp を使用**
    
    yt-dlpはより堅牢で、IPブロックを回避しやすいです：
    
@@ -189,26 +212,24 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
      --channel-id UCpLu0KjNy616-E95gPx7LZg \
      --max-videos 10 \
      --outdir ./out \
-     --provider openai \
-     --model gpt-4.1 \
      --use-ytdlp
    ```
    
    ※ IPブロックエラーが発生した場合、自動的にyt-dlpにフォールバックします
 
-2. **レート制限を調整**
+3. **レート制限を調整**
 
    ```bash
    python yt_summary.py --channel-id UCxxxx --rps 0.3
    ```
 
-3. **プロキシを使用**
+4. **プロキシを使用**
 
    ```bash
    python yt_summary.py --channel-id UCxxxx --proxy http://proxy.example.com:8080
    ```
 
-4. **時間を置いて再実行**
+5. **時間を置いて再実行**
    - 数時間〜1日待ってから再実行
 
 ### API エラーが発生する場合

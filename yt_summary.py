@@ -86,9 +86,11 @@ class YouTubeSummaryTool:
         # Setup proxy and cookies if provided
         self.proxies = None
         self.cookies = None
+        self.cookies_file = None
         if args.proxy:
             self.proxies = {"https": args.proxy}
         if args.cookies_file and Path(args.cookies_file).exists():
+            self.cookies_file = args.cookies_file
             with open(args.cookies_file, 'r') as f:
                 self.cookies = f.read().strip()
         
@@ -281,12 +283,11 @@ class YouTubeSummaryTool:
                 
             self._rate_limit()
             
-            # Get available transcripts with proxy/cookies support
+            # Get available transcripts with proxy support
             kwargs = {}
             if self.proxies:
                 kwargs['proxies'] = self.proxies
-            if self.cookies:
-                kwargs['cookies'] = self.cookies
+            # Note: youtube-transcript-api doesn't support cookies directly
                 
             api = YouTubeTranscriptApi()
             transcript_list = api.list(video_id, **kwargs)
@@ -329,12 +330,10 @@ class YouTubeSummaryTool:
             if not transcript:
                 raise ValueError("No suitable transcript found")
                 
-            # Fetch the transcript with proxy/cookies support
+            # Fetch the transcript with proxy support
             fetch_kwargs = {}
             if self.proxies:
                 fetch_kwargs['proxies'] = self.proxies
-            if self.cookies:
-                fetch_kwargs['cookies'] = self.cookies
                 
             segments = transcript.fetch(**fetch_kwargs)
             
@@ -413,17 +412,15 @@ class YouTubeSummaryTool:
                 'yt-dlp',
                 '--list-subs',
                 '--no-warnings',
+                '--user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                '--no-check-certificate',
                 url
             ]
             
             if self.proxies and self.proxies.get('https'):
                 info_cmd.extend(['--proxy', self.proxies['https']])
-            if self.cookies:
-                # Write cookies to temp file
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                    f.write(self.cookies)
-                    cookies_file = f.name
-                info_cmd.extend(['--cookies', cookies_file])
+            if self.cookies_file:
+                info_cmd.extend(['--cookies', self.cookies_file])
             
             # Check available subtitles
             result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=30)
@@ -457,16 +454,21 @@ class YouTubeSummaryTool:
                     '--write-auto-sub',
                     '--sub-lang', selected_lang,
                     '--skip-download',
-                    '--sub-format', 'json3/srv3/srv2/srv1/ttml/vtt/best',
+                    '--sub-format', 'vtt/ttml/srv1/srv2/srv3/json3/best',  # Try vtt first as it's more stable
                     '--no-warnings',
+                    '--user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    '--no-check-certificate',
+                    '--sleep-interval', '2',  # Sleep 2 seconds between requests
+                    '--max-sleep-interval', '5',
+                    '--extractor-args', 'youtube:player_client=android',  # Use Android client which is less restricted
                     '-o', str(output_path),
                     url
                 ]
                 
                 if self.proxies and self.proxies.get('https'):
                     cmd.extend(['--proxy', self.proxies['https']])
-                if self.cookies:
-                    cmd.extend(['--cookies', cookies_file])
+                if self.cookies_file:
+                    cmd.extend(['--cookies', self.cookies_file])
                 
                 # Execute yt-dlp
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -516,32 +518,62 @@ class YouTubeSummaryTool:
                     with open(subtitle_file, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
-                    # Simple VTT parser
-                    pattern = r'(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})\n(.+?)(?=\n\n|\Z)'
-                    matches = re.findall(pattern, content, re.DOTALL)
+                    # Remove WEBVTT header and metadata
+                    lines = content.split('\n')
                     
-                    for start_time, end_time, text in matches:
-                        # Convert time to seconds
-                        def time_to_seconds(time_str):
-                            parts = time_str.split(':')
-                            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
-                        
-                        start = time_to_seconds(start_time)
-                        end = time_to_seconds(end_time)
-                        
-                        # Clean text
-                        text = re.sub(r'<[^>]+>', '', text).strip()  # Remove HTML tags
-                        if self.args.clean_tags:
-                            text = re.sub(r'\[.*?\]', '', text).strip()
-                        
-                        if text:
-                            segment = {
-                                'start': start,
-                                'duration': end - start,
-                                'text': text
-                            }
-                            segments.append(segment)
-                            text_parts.append(text)
+                    i = 0
+                    while i < len(lines):
+                        # Skip header and empty lines
+                        if lines[i].startswith('WEBVTT') or lines[i].strip() == '' or lines[i].startswith('NOTE'):
+                            i += 1
+                            continue
+                            
+                        # Look for timestamp line
+                        if ' --> ' in lines[i]:
+                            timestamp_line = lines[i].strip()
+                            
+                            # Parse timestamp
+                            match = re.match(r'(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})', timestamp_line)
+                            if not match:
+                                i += 1
+                                continue
+                            
+                            start_time = match.group(1).replace(',', '.')
+                            end_time = match.group(2).replace(',', '.')
+                            
+                            # Convert time to seconds
+                            def time_to_seconds(time_str):
+                                parts = time_str.split(':')
+                                return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+                            
+                            start = time_to_seconds(start_time)
+                            end = time_to_seconds(end_time)
+                            
+                            # Collect text lines until next timestamp or empty line
+                            text_lines = []
+                            i += 1
+                            while i < len(lines) and lines[i].strip() != '' and ' --> ' not in lines[i]:
+                                text_lines.append(lines[i].strip())
+                                i += 1
+                            
+                            # Join and clean text
+                            text = ' '.join(text_lines)
+                            text = re.sub(r'<[^>]+>', '', text)  # Remove HTML tags
+                            text = re.sub(r'\{[^}]+\}', '', text)  # Remove style tags
+                            if self.args.clean_tags:
+                                text = re.sub(r'\[.*?\]', '', text).strip()
+                            
+                            text = text.strip()
+                            if text:
+                                segment = {
+                                    'start': start,
+                                    'duration': end - start,
+                                    'text': text
+                                }
+                                segments.append(segment)
+                                text_parts.append(text)
+                        else:
+                            i += 1
                 
                 if not segments:
                     self.logger.error(f"No valid segments found in subtitle for {video_id}")
