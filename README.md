@@ -161,6 +161,9 @@ out/
 
 - `--rps`: API呼び出しレート制限（デフォルト: 0.8 req/sec）
 - `--log-file`: ログファイルパス
+- `--proxy`: HTTP/HTTPSプロキシURL（例: <http://proxy.example.com:8080）>
+- `--cookies-file`: YouTube認証用のcookies.txtファイルパス
+- `--use-ytdlp`: yt-dlpを使用して文字起こしを取得（IPブロック回避に有効）
 
 ## トラブルシューティング
 
@@ -168,6 +171,45 @@ out/
 
 - 動画に字幕が設定されていない可能性があります
 - `--languages` オプションで他の言語を試してください
+
+### IP ブロック（IpBlocked エラー）が発生する場合
+
+YouTubeがIPをブロックしている可能性があります。以下の対策を試してください：
+
+1. **yt-dlp を使用（推奨）**
+   
+   yt-dlpはより堅牢で、IPブロックを回避しやすいです：
+   
+   ```bash
+   # yt-dlpをインストール
+   pip install yt-dlp
+   
+   # --use-ytdlp オプションを追加
+   python yt_summary.py \
+     --channel-id UCpLu0KjNy616-E95gPx7LZg \
+     --max-videos 10 \
+     --outdir ./out \
+     --provider openai \
+     --model gpt-4.1 \
+     --use-ytdlp
+   ```
+   
+   ※ IPブロックエラーが発生した場合、自動的にyt-dlpにフォールバックします
+
+2. **レート制限を調整**
+
+   ```bash
+   python yt_summary.py --channel-id UCxxxx --rps 0.3
+   ```
+
+3. **プロキシを使用**
+
+   ```bash
+   python yt_summary.py --channel-id UCxxxx --proxy http://proxy.example.com:8080
+   ```
+
+4. **時間を置いて再実行**
+   - 数時間〜1日待ってから再実行
 
 ### API エラーが発生する場合
 

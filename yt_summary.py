@@ -24,7 +24,10 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tqdm import tqdm
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptList
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, IpBlocked
+import subprocess
+import tempfile
 
 
 @dataclass
@@ -79,6 +82,15 @@ class YouTubeSummaryTool:
         # Rate limiting
         self.last_request_time = 0
         self.request_interval = 1.0 / args.rps
+        
+        # Setup proxy and cookies if provided
+        self.proxies = None
+        self.cookies = None
+        if args.proxy:
+            self.proxies = {"https": args.proxy}
+        if args.cookies_file and Path(args.cookies_file).exists():
+            with open(args.cookies_file, 'r') as f:
+                self.cookies = f.read().strip()
         
     def _setup_logging(self):
         """Setup logging configuration"""
@@ -261,10 +273,23 @@ class YouTubeSummaryTool:
                 lang = self.index_data.get(video_id, VideoInfo(video_id=video_id)).language or 'unknown'
                 return segments, text, lang
                 
+            # Try yt-dlp first if enabled
+            if self.args.use_ytdlp:
+                result = self._fetch_transcript_ytdlp(video_id)
+                if result:
+                    return result
+                
             self._rate_limit()
             
-            # Get available transcripts
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            # Get available transcripts with proxy/cookies support
+            kwargs = {}
+            if self.proxies:
+                kwargs['proxies'] = self.proxies
+            if self.cookies:
+                kwargs['cookies'] = self.cookies
+                
+            api = YouTubeTranscriptApi()
+            transcript_list = api.list(video_id, **kwargs)
             
             # Try to get transcript in preferred languages
             languages = [lang.strip() for lang in self.args.languages.split(',')]
@@ -304,8 +329,14 @@ class YouTubeSummaryTool:
             if not transcript:
                 raise ValueError("No suitable transcript found")
                 
-            # Fetch the transcript
-            segments = transcript.fetch()
+            # Fetch the transcript with proxy/cookies support
+            fetch_kwargs = {}
+            if self.proxies:
+                fetch_kwargs['proxies'] = self.proxies
+            if self.cookies:
+                fetch_kwargs['cookies'] = self.cookies
+                
+            segments = transcript.fetch(**fetch_kwargs)
             
             # Process segments
             processed_segments = []
@@ -313,13 +344,23 @@ class YouTubeSummaryTool:
             
             for segment in segments:
                 # Clean text if requested
-                text = segment['text']
+                # Handle both dict and object formats
+                if isinstance(segment, dict):
+                    text = segment['text']
+                    start = segment['start']
+                    duration = segment['duration']
+                else:
+                    # FetchedTranscriptSnippet object
+                    text = segment.text
+                    start = segment.start
+                    duration = segment.duration
+                    
                 if self.args.clean_tags:
                     text = re.sub(r'\[.*?\]', '', text).strip()
                     
                 processed_segment = {
-                    'start': segment['start'],
-                    'duration': segment['duration'],
+                    'start': start,
+                    'duration': duration,
                     'text': text
                 }
                 processed_segments.append(processed_segment)
@@ -337,8 +378,195 @@ class YouTubeSummaryTool:
             self.logger.info(f"Fetched transcript for {video_id} in {selected_lang}")
             return processed_segments, full_text, selected_lang
             
+        except (TranscriptsDisabled, NoTranscriptFound) as e:
+            self.logger.warning(f"No transcript available for {video_id}: {e}")
+            # Try yt-dlp as fallback
+            if not self.args.use_ytdlp:
+                self.logger.info("Trying yt-dlp as fallback...")
+                result = self._fetch_transcript_ytdlp(video_id)
+                if result:
+                    return result
+            return None
+        except IpBlocked as e:
+            self.logger.error(f"IP blocked for {video_id}: {e}")
+            self.logger.info("Trying yt-dlp as fallback...")
+            # Try yt-dlp as fallback for IP block
+            result = self._fetch_transcript_ytdlp(video_id)
+            if result:
+                return result
+            self.logger.info("Consider using --proxy or --cookies-file options")
+            return None
         except Exception as e:
             self.logger.error(f"Failed to fetch transcript for {video_id}: {e}")
+            return None
+            
+    def _fetch_transcript_ytdlp(self, video_id: str) -> Optional[Tuple[List[Dict], str, str]]:
+        """Fetch transcript using yt-dlp as alternative method"""
+        try:
+            self.logger.info(f"Fetching transcript for {video_id} using yt-dlp")
+            
+            # Prepare yt-dlp command
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get available subtitles info first
+            info_cmd = [
+                'yt-dlp',
+                '--list-subs',
+                '--no-warnings',
+                url
+            ]
+            
+            if self.proxies and self.proxies.get('https'):
+                info_cmd.extend(['--proxy', self.proxies['https']])
+            if self.cookies:
+                # Write cookies to temp file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                    f.write(self.cookies)
+                    cookies_file = f.name
+                info_cmd.extend(['--cookies', cookies_file])
+            
+            # Check available subtitles
+            result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=30)
+            
+            # Determine language to download
+            languages = [lang.strip() for lang in self.args.languages.split(',')]
+            selected_lang = None
+            
+            for lang in languages:
+                if lang in result.stdout:
+                    selected_lang = lang
+                    break
+                    
+            if not selected_lang:
+                # Try auto-generated
+                if 'ja' in result.stdout or 'Japanese' in result.stdout:
+                    selected_lang = 'ja'
+                elif 'en' in result.stdout or 'English' in result.stdout:
+                    selected_lang = 'en'
+                else:
+                    self.logger.warning(f"No suitable subtitles found for {video_id}")
+                    return None
+            
+            # Download subtitles
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / '%(id)s.%(ext)s'
+                
+                cmd = [
+                    'yt-dlp',
+                    '--write-sub',
+                    '--write-auto-sub',
+                    '--sub-lang', selected_lang,
+                    '--skip-download',
+                    '--sub-format', 'json3/srv3/srv2/srv1/ttml/vtt/best',
+                    '--no-warnings',
+                    '-o', str(output_path),
+                    url
+                ]
+                
+                if self.proxies and self.proxies.get('https'):
+                    cmd.extend(['--proxy', self.proxies['https']])
+                if self.cookies:
+                    cmd.extend(['--cookies', cookies_file])
+                
+                # Execute yt-dlp
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode != 0:
+                    self.logger.error(f"yt-dlp failed: {result.stderr}")
+                    return None
+                
+                # Find the downloaded subtitle file
+                subtitle_files = list(Path(tmpdir).glob(f"{video_id}*"))
+                subtitle_files = [f for f in subtitle_files if f.suffix in ['.json3', '.srv3', '.srv2', '.srv1', '.vtt', '.ttml', '.srt']]
+                if not subtitle_files:
+                    self.logger.error(f"No subtitle file found for {video_id}")
+                    return None
+                
+                # Parse subtitle file
+                subtitle_file = subtitle_files[0]
+                file_ext = subtitle_file.suffix.lower()
+                self.logger.info(f"Found subtitle file: {subtitle_file.name}")
+                
+                segments = []
+                text_parts = []
+                
+                if file_ext in ['.json3', '.srv3', '.srv2', '.srv1']:
+                    # Parse JSON-based subtitle format
+                    with open(subtitle_file, 'r', encoding='utf-8') as f:
+                        subtitle_data = json.load(f)
+                    
+                    for event in subtitle_data.get('events', []):
+                        if 'segs' in event:
+                            text = ''.join(seg.get('utf8', '') for seg in event['segs'])
+                            if text.strip():
+                                # Clean text if requested
+                                if self.args.clean_tags:
+                                    text = re.sub(r'\[.*?\]', '', text).strip()
+                                
+                                segment = {
+                                    'start': event.get('tStartMs', 0) / 1000.0,
+                                    'duration': event.get('dDurationMs', 0) / 1000.0,
+                                    'text': text
+                                }
+                                segments.append(segment)
+                                text_parts.append(text)
+                                
+                elif file_ext == '.vtt':
+                    # Parse VTT format
+                    with open(subtitle_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Simple VTT parser
+                    pattern = r'(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})\n(.+?)(?=\n\n|\Z)'
+                    matches = re.findall(pattern, content, re.DOTALL)
+                    
+                    for start_time, end_time, text in matches:
+                        # Convert time to seconds
+                        def time_to_seconds(time_str):
+                            parts = time_str.split(':')
+                            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+                        
+                        start = time_to_seconds(start_time)
+                        end = time_to_seconds(end_time)
+                        
+                        # Clean text
+                        text = re.sub(r'<[^>]+>', '', text).strip()  # Remove HTML tags
+                        if self.args.clean_tags:
+                            text = re.sub(r'\[.*?\]', '', text).strip()
+                        
+                        if text:
+                            segment = {
+                                'start': start,
+                                'duration': end - start,
+                                'text': text
+                            }
+                            segments.append(segment)
+                            text_parts.append(text)
+                
+                if not segments:
+                    self.logger.error(f"No valid segments found in subtitle for {video_id}")
+                    return None
+                
+                full_text = ' '.join(text_parts)
+                
+                # Save to files
+                json_path = self.transcript_dir / f"{video_id}.json"
+                txt_path = self.transcript_dir / f"{video_id}.txt"
+                
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(segments, f, ensure_ascii=False, indent=2)
+                    
+                with open(txt_path, 'w', encoding='utf-8') as f:
+                    f.write(full_text)
+                
+                self.logger.info(f"Successfully fetched transcript for {video_id} using yt-dlp (lang: {selected_lang})")
+                return segments, full_text, selected_lang
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"yt-dlp timeout for {video_id}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Failed to fetch transcript with yt-dlp for {video_id}: {e}")
             return None
             
     def generate_summary(self, video_id: str, text: str, metadata: Dict[str, str]) -> Optional[SummaryResult]:
@@ -718,6 +946,12 @@ def main():
     
     # Logging
     parser.add_argument('--log-file', help='Log file path')
+    
+    # Proxy and authentication
+    parser.add_argument('--proxy', help='HTTP/HTTPS proxy URL (e.g., http://proxy.example.com:8080)')
+    parser.add_argument('--cookies-file', help='Path to cookies.txt file for YouTube authentication')
+    parser.add_argument('--use-ytdlp', action='store_true',
+                       help='Use yt-dlp for transcript fetching (more robust, avoids IP blocks)')
     
     args = parser.parse_args()
     
