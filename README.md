@@ -1,14 +1,16 @@
 # YouTube Video Transcript and Summary Tool
 
-YouTube動画の文字起こしを取得し、AI（Claude/OpenAI）で日本語要約を生成するツールです。大量の動画を効率的に処理し、差分管理により再実行時は新規分のみを処理します。
+YouTube動画の文字起こしを取得し、AI（Claude/OpenAI）で日本語要約を生成するツールです。チャンネル内の全動画を一括処理する機能も備えており、大量の動画を効率的に処理できます。
 
-## 機能
+## 主な機能
 
-- YouTube チャンネル/プレイリストから動画を自動取得
-- 文字起こしの取得（日本語優先、多言語対応）
-- AI による日本語要約生成（会話の文脈を考慮）
-- 差分管理による効率的な再実行
-- マップリデュース方式による長時間動画対応
+- 📺 **チャンネル全動画の一括処理** - チャンネル内の全動画をCSVに出力し、一括で文字起こし・要約
+- 🎯 YouTube チャンネル/プレイリストから動画を自動取得
+- 📝 文字起こしの取得（日本語優先、多言語対応）
+- 🤖 AI による日本語要約生成（会話の文脈を考慮）
+- 🔄 差分管理による効率的な再実行
+- 📊 マップリデュース方式による長時間動画対応
+- 🛡️ IPブロック回避機能（Cookie認証、yt-dlp対応）
 
 ## セットアップ
 
@@ -25,6 +27,8 @@ pip install -r requirements.txt
 ```fish
 set -x -g ANTHROPIC_API_KEY "sk-ant-..."
 set -x -g OPENAI_API_KEY "sk-proj-..."
+# オプション: YouTube Data API（全動画取得用）
+set -x -g YOUTUBE_API_KEY "AIza..."
 ```
 
 #### bash/zsh の場合
@@ -32,11 +36,53 @@ set -x -g OPENAI_API_KEY "sk-proj-..."
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-proj-..."
+# オプション: YouTube Data API（全動画取得用）
+export YOUTUBE_API_KEY="AIza..."
+```
+
+## クイックスタート
+
+### 🎬 チャンネル全動画を一括処理（新機能）
+
+```bash
+# 方法1: 統合スクリプトで一括実行
+python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw --max-videos 10
+
+# 方法2: チャンネルURLから処理
+python process_channel.py --from-url "https://www.youtube.com/@GoogleDevelopers" --max-videos 5
+
+# 方法3: 既存のindex.csvから処理を再開
+python process_channel.py --use-existing-csv index.csv
 ```
 
 ## 使用方法
 
-### 基本的な使い方
+### 📋 チャンネル動画一覧の取得（channel_index.py）
+
+チャンネル内の全動画情報をCSVファイルに出力します：
+
+```bash
+# チャンネルIDから動画一覧を取得
+python channel_index.py UC_x5XG1OV2P6uZZ5FSM9Ttw
+
+# チャンネルURLから自動的にIDを取得
+python channel_index.py --from-url "https://www.youtube.com/@GoogleDevelopers"
+
+# YouTube Data APIで全動画を取得（要APIキー）
+export YOUTUBE_API_KEY="your-api-key"
+python channel_index.py UC_x5XG1OV2P6uZZ5FSM9Ttw --max-pages 20
+```
+
+出力されるCSV形式：
+- video_id: 動画ID
+- title: タイトル
+- url: 動画URL
+- published_at: 公開日時
+- description: 説明文（最初の500文字）
+- channel_name: チャンネル名
+- channel_id: チャンネルID
+
+### 🤖 文字起こし・要約処理（yt_summary.py）
 
 #### チャンネルの最新動画を処理（Anthropic Claude使用）
 
@@ -47,6 +93,16 @@ python yt_summary.py \
   --outdir ./out \
   --provider anthropic \
   --model claude-3-5-sonnet-latest
+```
+
+#### CSVファイルから処理（新機能）
+
+```bash
+# channel_index.pyで生成したCSVを使用
+python yt_summary.py \
+  --video-ids-file index.csv \
+  --max-videos 50 \
+  --outdir ./out
 ```
 
 #### プレイリストから処理
@@ -66,8 +122,26 @@ python yt_summary.py \
   --video-ids-file ./video_ids.txt \
   --outdir ./out \
   --provider openai \
-  --model gpt-4.1-mini \
+  --model gpt-4o-mini \
   --clean-tags  # [音楽]等のタグを除去
+```
+
+### 🔄 一括処理スクリプト（process_channel.py）
+
+チャンネル動画の取得から文字起こし・要約まで一括で実行：
+
+```bash
+# 基本的な使い方
+python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw
+
+# 詳細なオプション
+python process_channel.py UC_x5XG1OV2P6uZZ5FSM9Ttw \
+  --max-videos 20 \
+  --provider openai \
+  --model gpt-4o-mini \
+  --clean-tags \
+  --use-ytdlp \
+  --cookies-file cookies.txt
 ```
 
 ### 差分処理と再実行
@@ -136,7 +210,7 @@ out/
 
 - `--channel-id`: YouTubeチャンネルID
 - `--playlist-id`: YouTubeプレイリストID
-- `--video-ids-file`: 動画ID/URLのリストファイル
+- `--video-ids-file`: 動画ID/URLのリストファイル（テキストまたはCSV）
 
 ### 処理設定
 
@@ -161,7 +235,7 @@ out/
 
 - `--rps`: API呼び出しレート制限（デフォルト: 0.8 req/sec）
 - `--log-file`: ログファイルパス
-- `--proxy`: HTTP/HTTPSプロキシURL（例: <http://proxy.example.com:8080）>
+- `--proxy`: HTTP/HTTPSプロキシURL（例: http://proxy.example.com:8080）
 - `--cookies-file`: YouTube認証用のcookies.txtファイルパス
 - `--use-ytdlp`: yt-dlpを使用して文字起こしを取得（IPブロック回避に有効）
 
@@ -194,7 +268,7 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
      --max-videos 10 \
      --outdir ./out \
      --provider openai \
-     --model gpt-4.1 \
+     --model gpt-4o \
      --cookies-file cookies.txt \
      --use-ytdlp
    ```
@@ -241,8 +315,23 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
 
 - `--chunk-chars` を小さくして、チャンクサイズを調整してください
 
+## ツール一覧
+
+| ツール | 説明 | 主な用途 |
+|--------|------|----------|
+| `yt_summary.py` | メインの文字起こし・要約ツール | 動画の文字起こしと要約生成 |
+| `channel_index.py` | チャンネル動画一覧取得ツール | チャンネル内の全動画をCSVに出力 |
+| `process_channel.py` | 一括処理統合ツール | チャンネル全動画の自動処理 |
+| `extract_cookies.py` | Cookie抽出ツール | IPブロック回避用の認証情報取得 |
+| `get_channel_id.py` | チャンネルID取得ツール | URLからチャンネルIDを抽出 |
+
 ## 注意事項
 
 - APIの利用料金が発生します（特に大量処理時）
 - 初回実行時は `--max-videos` を小さくして動作確認することを推奨
 - `index.csv` で処理状況を確認できます
+- YouTube Data APIを使用する場合は、[Google Cloud Console](https://console.cloud.google.com/)でAPIキーを取得してください
+
+## ライセンス
+
+MIT License
