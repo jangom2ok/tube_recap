@@ -16,12 +16,12 @@ import sys
 from typing import Optional
 
 # Try to import browser_cookie3 for cross-platform cookie extraction
-HAS_BROWSER_COOKIE3 = False
 try:
-    import browser_cookie3  # type: ignore
+    import browser_cookie3  # type: ignore[import-not-found]
     HAS_BROWSER_COOKIE3 = True
 except ImportError:
-    pass
+    browser_cookie3 = None  # type: ignore[assignment]
+    HAS_BROWSER_COOKIE3 = False
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
@@ -85,7 +85,7 @@ def extract_cookies_sqlite(db_path: Path, domain: str = '.youtube.com') -> list[
 
         cookies = []
         for row in cursor.fetchall():
-            host, name, value, path, expires, secure, httponly, has_expires = row
+            host, name, value, path, expires, secure, _, has_expires = row
 
             # Netscape cookie format
             cookie_line = '\t'.join([
@@ -115,27 +115,27 @@ def extract_cookies_browser_cookie3(browser: str = 'chrome', domain: str = 'yout
 
     try:
         if browser.lower() == 'chrome':
-            cj = browser_cookie3.chrome(domain_name=domain)
+            cj = browser_cookie3.chrome(domain_name=domain)  # type: ignore[attr-defined]
         elif browser.lower() == 'firefox':
-            cj = browser_cookie3.firefox(domain_name=domain)
+            cj = browser_cookie3.firefox(domain_name=domain)  # type: ignore[attr-defined]
         elif browser.lower() == 'safari':
-            cj = browser_cookie3.safari(domain_name=domain)
+            cj = browser_cookie3.safari(domain_name=domain)  # type: ignore[attr-defined]
         elif browser.lower() == 'edge':
-            cj = browser_cookie3.edge(domain_name=domain)
+            cj = browser_cookie3.edge(domain_name=domain)  # type: ignore[attr-defined]
         else:
             return None
 
-        cookies = []
+        cookies: list[str] = []
         for cookie in cj:
             # Netscape cookie format
             cookie_line = '\t'.join([
-                cookie.domain,
-                'TRUE' if cookie.domain.startswith('.') else 'FALSE',
-                cookie.path,
+                str(cookie.domain),
+                'TRUE' if str(cookie.domain).startswith('.') else 'FALSE',
+                str(cookie.path),
                 'TRUE' if cookie.secure else 'FALSE',
                 str(int(cookie.expires)) if cookie.expires else '0',
-                cookie.name,
-                cookie.value
+                str(cookie.name),
+                str(cookie.value)
             ])
             cookies.append(cookie_line)
 
