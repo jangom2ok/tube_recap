@@ -13,16 +13,18 @@ import tempfile
 from pathlib import Path
 import shutil
 import sys
+from typing import Optional
 
+# Try to import browser_cookie3 for cross-platform cookie extraction
+HAS_BROWSER_COOKIE3 = False
 try:
-    # Try to import browser_cookie3 for cross-platform cookie extraction
-    import browser_cookie3
+    import browser_cookie3  # type: ignore
     HAS_BROWSER_COOKIE3 = True
 except ImportError:
-    HAS_BROWSER_COOKIE3 = False
+    pass
 
 
-def get_chrome_cookies_db():
+def get_chrome_cookies_db() -> Optional[Path]:
     """Get Chrome cookies database path"""
     if sys.platform == 'darwin':  # macOS
         base = Path.home() / "Library/Application Support/Google/Chrome"
@@ -42,7 +44,7 @@ def get_chrome_cookies_db():
     return None
 
 
-def get_safari_cookies_db():
+def get_safari_cookies_db() -> Optional[Path]:
     """Get Safari cookies database path (macOS only)"""
     if sys.platform != 'darwin':
         return None
@@ -54,7 +56,7 @@ def get_safari_cookies_db():
     return None
 
 
-def extract_cookies_sqlite(db_path, domain='.youtube.com'):
+def extract_cookies_sqlite(db_path: Path, domain: str = '.youtube.com') -> list[str]:
     """Extract cookies from SQLite database (Chrome/Firefox style)"""
     # Create a temporary copy to avoid locking issues
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -106,7 +108,7 @@ def extract_cookies_sqlite(db_path, domain='.youtube.com'):
             os.unlink(tmp_path)
 
 
-def extract_cookies_browser_cookie3(browser='chrome', domain='youtube.com'):
+def extract_cookies_browser_cookie3(browser: str = 'chrome', domain: str = 'youtube.com') -> Optional[list[str]]:
     """Extract cookies using browser_cookie3 library"""
     if not HAS_BROWSER_COOKIE3:
         return None
@@ -144,7 +146,7 @@ def extract_cookies_browser_cookie3(browser='chrome', domain='youtube.com'):
         return None
 
 
-def save_cookies_netscape(cookies, output_file):
+def save_cookies_netscape(cookies: list[str], output_file: str) -> None:
     """Save cookies in Netscape format (compatible with yt-dlp)"""
     with open(output_file, 'w') as f:
         # Netscape cookies file header
@@ -156,7 +158,7 @@ def save_cookies_netscape(cookies, output_file):
             f.write(cookie + '\n')
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description='Extract YouTube cookies from browser')
     parser.add_argument('--browser', choices=['chrome', 'firefox', 'safari', 'edge', 'auto'],
                        default='auto', help='Browser to extract cookies from')
