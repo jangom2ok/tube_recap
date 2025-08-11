@@ -18,13 +18,13 @@ from typing import Optional
 # Check for browser_cookie3 availability
 try:
     import browser_cookie3  # type: ignore[import-not-found]
-    HAS_BROWSER_COOKIE3 = True
+    _browser_cookie3_available = True
 except ImportError:
-    HAS_BROWSER_COOKIE3 = False
-
-# Conditional typing for browser_cookie3
-if not HAS_BROWSER_COOKIE3:
     browser_cookie3 = None  # type: ignore[assignment]
+    _browser_cookie3_available = False
+
+# Define constant
+HAS_BROWSER_COOKIE3: bool = _browser_cookie3_available
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
