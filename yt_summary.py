@@ -372,9 +372,11 @@ class YouTubeSummaryTool:
                 # Clean text if requested
                 # Handle both dict and object formats
                 if isinstance(segment, dict):
-                    text = str(segment.get('text', ''))
-                    start = float(segment.get('start', 0))
-                    duration = float(segment.get('duration', 0))
+                    # Cast segment to Any to avoid type checking issues with get()
+                    seg: Any = segment
+                    text = str(seg.get('text', ''))
+                    start = float(seg.get('start', 0))
+                    duration = float(seg.get('duration', 0))
                 else:
                     # FetchedTranscriptSnippet object
                     text = str(segment.text)  # type: ignore[attr-defined]
