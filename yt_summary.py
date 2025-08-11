@@ -243,19 +243,43 @@ class YouTubeSummaryTool:
         return videos
         
     def _get_videos_from_file(self, file_path: str) -> List[Tuple[str, Dict[str, str]]]:
-        """Get video IDs from file"""
+        """Get video IDs from file (text or CSV)"""
         videos = []
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    video_id = self._parse_video_id(line)
-                    metadata = {
-                        'title': '',
-                        'published_at': '',
-                        'url': f"https://www.youtube.com/watch?v={video_id}"
-                    }
-                    videos.append((video_id, metadata))
+        file_path_obj = Path(file_path)
+        
+        # CSVファイルの場合
+        if file_path_obj.suffix.lower() == '.csv':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # video_id カラムから取得
+                    video_id = row.get('video_id', '')
+                    if not video_id:
+                        # URLカラムから抽出を試みる
+                        url = row.get('url', '')
+                        if url:
+                            video_id = self._parse_video_id(url)
+                    
+                    if video_id:
+                        metadata = {
+                            'title': row.get('title', ''),
+                            'published_at': row.get('published_at', ''),
+                            'url': row.get('url', f"https://www.youtube.com/watch?v={video_id}")
+                        }
+                        videos.append((video_id, metadata))
+        else:
+            # テキストファイルの場合（1行1動画ID/URL）
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        video_id = self._parse_video_id(line)
+                        metadata = {
+                            'title': '',
+                            'published_at': '',
+                            'url': f"https://www.youtube.com/watch?v={video_id}"
+                        }
+                        videos.append((video_id, metadata))
         return videos
         
     def fetch_transcript(self, video_id: str) -> Optional[Tuple[List[Dict], str, str]]:

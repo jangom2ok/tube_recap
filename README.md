@@ -183,11 +183,11 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
    ```bash
    # 方法1: 付属のスクリプトで自動抽出
    python extract_cookies.py --browser chrome --output cookies.txt
-   
+
    # 方法2: browser_cookie3を使用（要インストール）
    pip install browser_cookie3
    python extract_cookies.py --output cookies.txt
-   
+
    # Cookieを使用して実行
    python yt_summary.py \
      --channel-id UCpLu0KjNy616-E95gPx7LZg \
@@ -200,13 +200,13 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
    ```
 
 2. **yt-dlp を使用**
-   
+
    yt-dlpはより堅牢で、IPブロックを回避しやすいです：
-   
+
    ```bash
    # yt-dlpをインストール
    pip install yt-dlp
-   
+
    # --use-ytdlp オプションを追加
    python yt_summary.py \
      --channel-id UCpLu0KjNy616-E95gPx7LZg \
@@ -214,7 +214,7 @@ YouTubeがIPをブロックしている可能性があります。以下の対�
      --outdir ./out \
      --use-ytdlp
    ```
-   
+
    ※ IPブロックエラーが発生した場合、自動的にyt-dlpにフォールバックします
 
 3. **レート制限を調整**
