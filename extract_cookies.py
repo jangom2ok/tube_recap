@@ -13,15 +13,17 @@ import tempfile
 from pathlib import Path
 import shutil
 import sys
-from typing import Optional
+from typing import Optional, Any
 
 # Try to import browser_cookie3 for cross-platform cookie extraction
+HAS_BROWSER_COOKIE3: bool = False
+browser_cookie3: Any = None
+
 try:
     import browser_cookie3  # type: ignore[import-not-found]
     HAS_BROWSER_COOKIE3 = True
 except ImportError:
-    browser_cookie3 = None  # type: ignore[assignment]
-    HAS_BROWSER_COOKIE3 = False
+    pass
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
@@ -97,7 +99,7 @@ def extract_cookies_sqlite(db_path: Path, domain: str = '.youtube.com') -> list[
                 name,
                 value
             ])
-            cookies.append(cookie_line)
+            cookies.append(cookie_line)  # type: ignore[arg-type]
 
         conn.close()
         return cookies
@@ -126,18 +128,18 @@ def extract_cookies_browser_cookie3(browser: str = 'chrome', domain: str = 'yout
             return None
 
         cookies: list[str] = []
-        for cookie in cj:
+        for cookie in cj:  # type: ignore[assignment]
             # Netscape cookie format
             cookie_line = '\t'.join([
-                str(cookie.domain),
-                'TRUE' if str(cookie.domain).startswith('.') else 'FALSE',
-                str(cookie.path),
-                'TRUE' if cookie.secure else 'FALSE',
-                str(int(cookie.expires)) if cookie.expires else '0',
-                str(cookie.name),
-                str(cookie.value)
+                str(cookie.domain),  # type: ignore[attr-defined]
+                'TRUE' if str(cookie.domain).startswith('.') else 'FALSE',  # type: ignore[attr-defined]
+                str(cookie.path),  # type: ignore[attr-defined]
+                'TRUE' if cookie.secure else 'FALSE',  # type: ignore[attr-defined]
+                str(int(cookie.expires)) if cookie.expires else '0',  # type: ignore[attr-defined]
+                str(cookie.name),  # type: ignore[attr-defined]
+                str(cookie.value)  # type: ignore[attr-defined]
             ])
-            cookies.append(cookie_line)
+            cookies.append(cookie_line)  # type: ignore[arg-type]
 
         return cookies
 
