@@ -13,18 +13,18 @@ import tempfile
 from pathlib import Path
 import shutil
 import sys
-from typing import Optional, Any
+from typing import Optional
 
 # Check for browser_cookie3 availability
 try:
     import browser_cookie3  # type: ignore[import-not-found]
-    _has_browser_cookie3 = True
+    HAS_BROWSER_COOKIE3 = True
 except ImportError:
-    browser_cookie3 = None  # type: ignore[assignment]
-    _has_browser_cookie3 = False
+    HAS_BROWSER_COOKIE3 = False
 
-# Export as constants
-HAS_BROWSER_COOKIE3: bool = _has_browser_cookie3
+# Conditional typing for browser_cookie3
+if not HAS_BROWSER_COOKIE3:
+    browser_cookie3 = None  # type: ignore[assignment]
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
