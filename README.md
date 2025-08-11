@@ -269,7 +269,7 @@ CLEAN_TAGS=false              # タグクリーンフラグ
 
 - `--rps`: API呼び出しレート制限（デフォルト: 0.8 req/sec）
 - `--log-file`: ログファイルパス
-- `--proxy`: HTTP/HTTPSプロキシURL（例: http://proxy.example.com:8080）
+- `--proxy`: HTTP/HTTPSプロキシURL（例: <http://proxy.example.com:8080>）
 - `--cookies-file`: YouTube認証用のcookies.txtファイルパス
 - `--use-ytdlp`: yt-dlpを使用して文字起こしを取得（IPブロック回避に有効）
 
