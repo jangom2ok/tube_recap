@@ -114,7 +114,7 @@ class YouTubeSummaryTool:
 
     def _load_index(self) -> Dict[str, VideoInfo]:
         """Load existing index from CSV"""
-        index = {}
+        index: Dict[str, VideoInfo] = {}
         if self.index_file.exists():
             with open(self.index_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
@@ -264,7 +264,7 @@ class YouTubeSummaryTool:
                             video_id = self._parse_video_id(url)
 
                     if video_id:
-                        metadata: Dict[str, str] = {
+                        metadata = {
                             'title': row.get('title', ''),
                             'published_at': row.get('published_at', ''),
                             'url': row.get('url', f"https://www.youtube.com/watch?v={video_id}")
@@ -277,7 +277,7 @@ class YouTubeSummaryTool:
                     line = line.strip()
                     if line:
                         video_id = self._parse_video_id(line)
-                        metadata: Dict[str, str] = {
+                        metadata = {
                             'title': '',
                             'published_at': '',
                             'url': f"https://www.youtube.com/watch?v={video_id}"
@@ -365,26 +365,26 @@ class YouTubeSummaryTool:
             segments = transcript.fetch(**fetch_kwargs)
 
             # Process segments
-            processed_segments = []
-            text_parts = []
+            processed_segments: List[Dict[str, Any]] = []
+            text_parts: List[str] = []
 
             for segment in segments:
                 # Clean text if requested
                 # Handle both dict and object formats
                 if isinstance(segment, dict):
-                    text = segment['text']
-                    start = segment['start']
-                    duration = segment['duration']
+                    text = str(segment['text'])
+                    start = float(segment['start'])
+                    duration = float(segment['duration'])
                 else:
                     # FetchedTranscriptSnippet object
-                    text = segment.text
-                    start = segment.start
-                    duration = segment.duration
+                    text = str(segment.text)
+                    start = float(segment.start)
+                    duration = float(segment.duration)
 
                 if self.args.clean_tags:
                     text = re.sub(r'\[.*?\]', '', text).strip()
 
-                processed_segment = {
+                processed_segment: Dict[str, Any] = {
                     'start': start,
                     'duration': duration,
                     'text': text
@@ -402,7 +402,7 @@ class YouTubeSummaryTool:
                 f.write(full_text)
 
             self.logger.info(f"Fetched transcript for {video_id} in {selected_lang}")
-            return processed_segments, full_text, selected_lang
+            return processed_segments, full_text, selected_lang or 'unknown'
 
         except (TranscriptsDisabled, NoTranscriptFound) as e:
             self.logger.warning(f"No transcript available for {video_id}: {e}")
@@ -475,7 +475,7 @@ class YouTubeSummaryTool:
             with tempfile.TemporaryDirectory() as tmpdir:
                 output_path = Path(tmpdir) / '%(id)s.%(ext)s'
 
-                cmd = [
+                cmd: List[str] = [
                     'yt-dlp',
                     '--write-sub',
                     '--write-auto-sub',
@@ -493,9 +493,9 @@ class YouTubeSummaryTool:
                 ]
 
                 if self.proxies and self.proxies.get('https'):
-                    cmd.extend(['--proxy', self.proxies['https']])
+                    cmd.extend(['--proxy', str(self.proxies['https'])])
                 if self.cookies_file:
-                    cmd.extend(['--cookies', self.cookies_file])
+                    cmd.extend(['--cookies', str(self.cookies_file)])
 
                 # Execute yt-dlp
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
