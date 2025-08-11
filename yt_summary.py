@@ -18,12 +18,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore[import-untyped]
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, IpBlocked
 import subprocess
@@ -101,7 +101,7 @@ class YouTubeSummaryTool:
     def _setup_logging(self):
         """Setup logging configuration"""
         log_format = '%(asctime)s - %(levelname)s - %(message)s'
-        handlers = [logging.StreamHandler()]
+        handlers: List[logging.Handler] = [logging.StreamHandler()]
 
         if self.args.log_file:
             handlers.append(logging.FileHandler(self.args.log_file))
@@ -228,7 +228,7 @@ class YouTubeSummaryTool:
         videos = []
         for entry in root.findall('atom:entry', ns):
             video_id_elem = entry.find('atom:id', ns)
-            if video_id_elem is not None:
+            if video_id_elem is not None and video_id_elem.text is not None:
                 video_id = video_id_elem.text.split(':')[-1]
 
                 title_elem = entry.find('atom:title', ns)
