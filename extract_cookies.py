@@ -16,14 +16,15 @@ import sys
 from typing import Optional, Any
 
 # Try to import browser_cookie3 for cross-platform cookie extraction
-HAS_BROWSER_COOKIE3: bool = False
-browser_cookie3: Any = None
+HAS_BROWSER_COOKIE3: bool
+browser_cookie3: Any
 
 try:
     import browser_cookie3  # type: ignore[import-not-found]
     HAS_BROWSER_COOKIE3 = True
 except ImportError:
-    pass
+    browser_cookie3 = None  # type: ignore[assignment]
+    HAS_BROWSER_COOKIE3 = False
 
 
 def get_chrome_cookies_db() -> Optional[Path]:
@@ -85,7 +86,7 @@ def extract_cookies_sqlite(db_path: Path, domain: str = '.youtube.com') -> list[
                 WHERE host LIKE ?
             """, (f'%{domain}%',))
 
-        cookies = []
+        cookies: list[str] = []
         for row in cursor.fetchall():
             host, name, value, path, expires, secure, _, has_expires = row
 
