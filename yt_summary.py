@@ -362,7 +362,7 @@ class YouTubeSummaryTool:
             if self.proxies:
                 fetch_kwargs['proxies'] = self.proxies
 
-            segments = transcript.fetch(**fetch_kwargs)
+            segments = transcript.fetch(preserve_formatting=False, **fetch_kwargs)  # type: ignore[arg-type]
 
             # Process segments
             processed_segments: List[Dict[str, Any]] = []
@@ -569,7 +569,7 @@ class YouTubeSummaryTool:
                             end_time = match.group(2).replace(',', '.')
 
                             # Convert time to seconds
-                            def time_to_seconds(time_str):
+                            def time_to_seconds(time_str: str) -> float:
                                 parts = time_str.split(':')
                                 return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
 
@@ -577,7 +577,7 @@ class YouTubeSummaryTool:
                             end = time_to_seconds(end_time)
 
                             # Collect text lines until next timestamp or empty line
-                            text_lines = []
+                            text_lines: List[str] = []
                             i += 1
                             while i < len(lines) and lines[i].strip() != '' and ' --> ' not in lines[i]:
                                 text_lines.append(lines[i].strip())
@@ -628,7 +628,7 @@ class YouTubeSummaryTool:
             self.logger.error(f"Failed to fetch transcript with yt-dlp for {video_id}: {e}")
             return None
 
-    def generate_summary(self, video_id: str, text: str, metadata: Dict[str, str]) -> Optional[SummaryResult]:
+    def generate_summary(self, video_id: str, text: str, metadata: Dict[str, str]) -> Optional[SummaryResult]:  # type: ignore[return]
         """Generate AI summary for the transcript"""
         try:
             # Check if already exists and not forcing
@@ -669,7 +669,7 @@ class YouTubeSummaryTool:
 
     def _chunk_text(self, text: str) -> List[str]:
         """Split text into chunks with overlap"""
-        chunks = []
+        chunks: List[str] = []
         chunk_size = self.args.chunk_chars
         overlap = self.args.chunk_overlap
 
@@ -688,7 +688,7 @@ class YouTubeSummaryTool:
         self.logger.info(f"Processing {len(chunks)} chunks for {video_id}")
 
         # Map phase: summarize each chunk
-        chunk_summaries = []
+        chunk_summaries: List[str] = []
         for i, chunk in enumerate(chunks):
             prompt = f"""以下のテキストは、YouTubeの動画の文字起こしの一部（{i+1}/{len(chunks)}）です。
 重要なポイントを箇条書きで3-5個抽出してください。
@@ -792,7 +792,10 @@ class YouTubeSummaryTool:
                 messages=[{"role": "user", "content": prompt}]
             )
 
-            return response.content[0].text
+            # Extract text from response content
+            if hasattr(response.content[0], 'text'):
+                return response.content[0].text  # type: ignore[attr-defined]
+            return str(response.content[0])
 
         except Exception as e:
             self.logger.error(f"Anthropic API call failed: {e}")
@@ -814,7 +817,7 @@ class YouTubeSummaryTool:
                 model=self.args.model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"} if "json" in prompt.lower() else None
+                response_format={"type": "json_object"} if "json" in prompt.lower() else openai.NOT_GIVEN  # type: ignore[attr-defined]
             )
 
             return response.choices[0].message.content
@@ -901,7 +904,7 @@ class YouTubeSummaryTool:
                     self._save_index()
                     continue
 
-                segments, text, language = transcript_result
+                _, text, language = transcript_result  # segments not used
                 video_info.language = language
                 video_info.transcript_chars = len(text)
 
