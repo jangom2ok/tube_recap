@@ -172,9 +172,14 @@ class ChannelIndexGenerator:
                     }
                     response = requests.get(channel_url, params=channel_params, timeout=30)
                     data = response.json()
+                    
+                    # デバッグ情報を追加
+                    if 'error' in data:
+                        self.logger.error(f"API error: {data['error']}")
+                        return []
 
                     if not data.get('items'):
-                        self.logger.error("Channel not found")
+                        self.logger.error(f"Channel not found. API Response: {data}")
                         return []
 
                     channel_info = data['items'][0]
