@@ -815,14 +815,61 @@ class YouTubeSummaryTool:
 
             client = openai.OpenAI(api_key=api_key)
 
-            response = client.chat.completions.create(
-                model=self.args.model,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"} if "json" in prompt.lower() else openai.NOT_GIVEN  # type: ignore[attr-defined]
-            )
+            # 基本パラメータ
+            params = {
+                'model': self.args.model,
+                'messages': [{"role": "user", "content": prompt}]
+            }
+            
+            # JSON形式のレスポンスが必要な場合
+            if "json" in prompt.lower():
+                params['response_format'] = {"type": "json_object"}
 
-            return response.choices[0].message.content
+            # まず max_tokens なしで試してみる（新しいモデルではデフォルト値が使われる）
+            try:
+                self.logger.info(f"Trying API call without max_tokens for model {self.args.model}")
+                response = client.chat.completions.create(**params)
+                return response.choices[0].message.content
+            except Exception as first_error:
+                error_str = str(first_error)
+                self.logger.debug(f"First attempt failed: {error_str}")
+                
+                # max_tokens パラメータを追加して再試行
+                if 'max_tokens' not in error_str or 'required' in error_str.lower():
+                    self.logger.info(f"Retrying with max_tokens parameter")
+                    params['max_tokens'] = max_tokens
+                    try:
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content
+                    except Exception as second_error:
+                        error_str_2 = str(second_error)
+                        self.logger.debug(f"Second attempt failed: {error_str_2}")
+                        
+                        # max_completion_tokens を試す
+                        if 'max_tokens' in error_str_2 and 'max_completion_tokens' in error_str_2:
+                            self.logger.info(f"Retrying with max_completion_tokens parameter")
+                            params.pop('max_tokens', None)
+                            params['max_completion_tokens'] = max_tokens
+                            response = client.chat.completions.create(**params)
+                            return response.choices[0].message.content
+                        else:
+                            raise second_error
+                            
+                # max_tokens が不要なモデルの場合はそのままエラーを返す
+                elif 'max_tokens' in error_str and 'not supported' in error_str:
+                    # エラーメッセージから推奨パラメータを抽出して使用
+                    if 'max_completion_tokens' in error_str:
+                        self.logger.info(f"Using max_completion_tokens as suggested by API")
+                        params['max_completion_tokens'] = max_tokens
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content
+                    else:
+                        # max_tokens を使わずに再試行（モデルのデフォルト値を使用）
+                        self.logger.info(f"Model {self.args.model} doesn't support max_tokens, using default")
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content
+                else:
+                    raise first_error
 
         except Exception as e:
             self.logger.error(f"OpenAI API call failed: {e}")
